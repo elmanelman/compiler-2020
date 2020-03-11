@@ -53,13 +53,17 @@ fun compileExpr(expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM(stmt) {
+  stmt.compileNestedSM.deepFlatten
+}
+
+public fun compileNestedSM(stmt) {
 	case stmt of
     Read(x) -> {READ, ST(x)}
   | Write(e) -> 
-    {compileExpr(e), singleton(WRITE)}.deepFlatten
+    {compileExpr(e), singleton(WRITE)}
   | Assn(x, e) -> 
-    {compileExpr(e), singleton(ST(x))}.deepFlatten
+    {compileExpr(e), singleton(ST(x))}
   | Seq(s1, s2) -> 
-    {compileSM(s1), compileSM(s2)}.deepFlatten
+    {compileSM(s1), compileSM(s2)}
 	esac
 }
