@@ -42,10 +42,9 @@ public fun evalSM(input, insns) {
 -- of stack machine instructions
 fun compileExpr(expr) {
 	case expr of
-    Const(x) -> singleton(CONST(x))
-  | Var(x) -> singleton(LD(x))
-  | Binop(op, l, r) ->
-    {compileExpr(l), compileExpr(r), singleton(BINOP(op))}.deepFlatten
+    Const(x)        -> singleton(CONST(x))
+  | Var(x)          -> singleton(LD(x))
+  | Binop(op, l, r) -> {compileExpr(l), compileExpr(r), singleton(BINOP(op))}
 	esac
 }
 

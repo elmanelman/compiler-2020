@@ -271,21 +271,61 @@ fun suffix (op) {
   esac
 }
 
+fun compileSimple (op, src, dst) {
+  if memOpnd (src) && memOpnd (dst) then 
+    {Mov (src, eax), Binop (op, eax, dst)}
+  else 
+    singleton (Binop (op, src, dst))
+  fi
+}
+
+fun compileDivision (op, src, dst) {
+  {
+    Mov   (dst, eax),
+    Cltd,
+    IDiv  (src),
+    Mov   (case op of "/" -> eax | "%" -> edx esac, dst)
+  }
+}
+
+fun compileComparison (op, src, dst) {
+  {
+    Binop ("^", edx, edx),
+    Mov   (src, eax),
+    Binop ("cmp", eax, dst),
+    Set   (suffix(op), "%dl"),
+    Mov   (edx, dst)
+  }
+}
+
+fun compileBoolean (op, src, dst) {
+  {
+    Binop ("^", eax, eax),
+    Binop ("cmp", dst, eax),
+    Set   (suffix("!="), "%al"),
+    Binop ("^", edx, edx),
+    Binop ("cmp", src, edx),
+    Set   (suffix("!="), "%dl"),
+    Binop (op, edx, eax),
+    Mov   (eax, dst)
+  }
+}
+
 -- Operator types for choosing appropriate assembler code 
 local op_types = {
-  ["+",  SIMPLE],
-  ["-",  SIMPLE],
-  ["*",  SIMPLE],
-  ["/",  DIVISION],
-  ["%",  DIVISION],
-  ["<",  COMPARISON],
-  ["<=", COMPARISON],
-  [">",  COMPARISON],
-  [">=", COMPARISON],
-  ["==", COMPARISON],
-  ["!=", COMPARISON],
-  ["!!", BOOLEAN],
-  ["&&", BOOLEAN]
+  ["+",  SMP],
+  ["-",  SMP],
+  ["*",  SMP],
+  ["/",  DIV],
+  ["%",  DIV],
+  ["<",  CMP],
+  ["<=", CMP],
+  [">",  CMP],
+  [">=", CMP],
+  ["==", CMP],
+  ["!=", CMP],
+  ["!!", BLN],
+  ["&&", BLN]
 };
 
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
@@ -317,51 +357,16 @@ fun compile (env, code) {
             esac
         | BINOP(op) ->
             case env.pop2 of 
-              [x, y, env] ->
+              [src, dst, env] ->
                 case env.push(y) of 
                   env ->
                     case assoc(op_types, op) of
                       Some(t) ->
                         case t of
-                          SIMPLE -> [env, code: {
-                            Mov   (y, eax), 
-                            Binop (op, x, eax), 
-                            Mov   (eax, y)
-                          }]
-                        | DIVISION -> 
-                            [env, code: {
-                              Push  (ebx),
-                              Mov   (y, eax), 
-                              Cltd, 
-                              Mov   (x, ebx), 
-                              IDiv  (ebx), 
-                              Pop   (ebx),
-                              Mov   (
-                                case op of 
-                                  "/" -> eax 
-                                | "%" -> edx 
-                                esac, y
-                              )
-                            }]
-                        | COMPARISON -> 
-                            [env, code: {
-                              Binop ("^", edx, edx),
-                              Mov   (x, eax),
-                              Binop ("cmp", eax, y),
-                              Set   (suffix(op), "%dl"),
-                              Mov   (edx, y)
-                            }]
-                        | BOOLEAN -> 
-                            [env, code: {
-                              Binop ("^", eax, eax), 
-                              Binop ("cmp", y, eax), 
-                              Set   (suffix("!="), "%al"),
-                              Binop ("^", edx, edx),
-                              Binop ("cmp", x, edx), 
-                              Set   (suffix("!="), "%dl"),
-                              Binop (op, edx, eax), 
-                              Mov   (eax, y)
-                            }]
+                          SMP -> [env, code: compileSimple (op, src, dst)]
+                        | DIV -> [env, code: compileDivision (op, src, dst)]
+                        | CMP -> [env, code: compileComparison (op, src, dst)]
+                        | BLN -> [env, code: compileBoolean (op, src, dst)]
                         esac
                     esac
                 esac
